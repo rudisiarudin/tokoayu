@@ -19,7 +19,6 @@ import {
   Settings,
   ShoppingBasket,
   Users,
-  WalletCards,
 } from "lucide-react";
 import {
   Bar,
@@ -41,7 +40,7 @@ import { SelectField } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { customers, debts, products, promos, reportChart, transactions, type Product } from "@/lib/dummy-data";
+import { customers, debts, products, promos, reportChart, type Product } from "@/lib/dummy-data";
 import { cn, rupiah } from "@/lib/utils";
 import {
   getSupabaseProducts,
@@ -1517,27 +1516,57 @@ function BarangPage() {
 }
 
 function PelangganPage() {
+  const [addOpen, setAddOpen] = useState(false);
+  const [localCustomers, setLocalCustomers] = useState(customers);
+
+  useEffect(() => {
+    getSupabaseCustomers().then(data => { if (data.length > 0) setLocalCustomers(data); });
+  }, []);
+
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {customers.map((customer) => (
-        <Card key={customer.id} className="rounded-2xl border bg-white shadow-sm transition hover:shadow-md hover:scale-[1.01]">
-          <div className="grid gap-4 p-6">
-            <div className="flex items-start justify-between gap-3 border-b border-dashed pb-2.5">
-              <div>
-                <p className="text-xl font-black text-foreground tracking-tight">{customer.name}</p>
-                <p className="text-xs font-semibold text-muted-foreground">{customer.whatsapp}</p>
-              </div>
-              <Badge variant={customer.type === "grosir" ? "info" : "success"}>{customer.type}</Badge>
-            </div>
-            <p className="text-sm font-semibold text-muted-foreground min-h-10">{customer.address}</p>
-            <div className="grid gap-2 border-t pt-2.5">
-              <Row label="Total belanja" value={rupiah(customer.totalSpend)} />
-              <Row label="Limit hutang" value={rupiah(customer.debtLimit)} />
-            </div>
-            <Button variant="outline" className="rounded-xl border-emerald-100 hover:bg-emerald-50 text-sm font-bold mt-2 h-11">Lihat Detail</Button>
+    <div className="grid gap-5">
+      <Card className="rounded-2xl border bg-white shadow-sm">
+        <div className="flex items-center justify-between p-5">
+          <div>
+            <p className="text-base font-black text-foreground">Data Pelanggan</p>
+            <p className="text-xs font-semibold text-muted-foreground">Kelola pelanggan setia TokoAyu.</p>
           </div>
-        </Card>
-      ))}
+          <Button className="rounded-xl shadow-md text-sm font-extrabold" onClick={() => setAddOpen(true)}>
+            <Plus size={20} /> Tambah Pelanggan
+          </Button>
+        </div>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {localCustomers.map((customer) => (
+          <Card key={customer.id} className="rounded-2xl border bg-white shadow-sm transition hover:shadow-md hover:scale-[1.01]">
+            <div className="grid gap-4 p-6">
+              <div className="flex items-start justify-between gap-3 border-b border-dashed pb-2.5">
+                <div>
+                  <p className="text-xl font-black text-foreground tracking-tight">{customer.name}</p>
+                  <p className="text-xs font-semibold text-muted-foreground">{customer.whatsapp}</p>
+                </div>
+                <Badge variant={customer.type === "grosir" ? "info" : "success"}>{customer.type}</Badge>
+              </div>
+              <p className="text-sm font-semibold text-muted-foreground min-h-10">{customer.address}</p>
+              <div className="grid gap-2 border-t pt-2.5">
+                <Row label="Total belanja" value={rupiah(customer.totalSpend)} />
+                <Row label="Limit hutang" value={rupiah(customer.debtLimit)} />
+              </div>
+              <Button variant="outline" className="rounded-xl border-emerald-100 hover:bg-emerald-50 text-sm font-bold mt-2 h-11">Lihat Detail</Button>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      <Dialog open={addOpen}>
+        <DialogContent onClose={() => setAddOpen(false)}>
+          <FormPelanggan onSave={() => {
+            getSupabaseCustomers().then(data => { if (data.length > 0) setLocalCustomers(data); });
+            setAddOpen(false);
+          }} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1921,37 +1950,134 @@ function FormBarang({ onSave, onScanTrigger, scannedBarcode }: { onSave: (prod: 
 }
 
 function FormHutang({ onSave }: { onSave: () => void }) {
+  const [customer, setCustomer] = useState(customers[0]?.name ?? "");
+  const [product, setProduct] = useState("");
+  const [amount, setAmount] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [note, setNote] = useState("");
+
+  const handleSubmit = async () => {
+    if (!customer || !amount) {
+      alert("Nama pelanggan dan total hutang wajib diisi!");
+      return;
+    }
+    const newDebt = {
+      id: `D-${Math.floor(1000 + Math.random() * 9000)}`,
+      customer,
+      amount: Number(amount) || 0,
+      dueDate: dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString("id-ID"),
+      status: "belum lunas" as const,
+      note,
+    };
+    await saveSupabaseDebt(newDebt as any);
+    onSave();
+  };
+
   return (
-    <div className="grid gap-4 p-5 pt-0">
-      <div>
-        <p className="text-2xl font-black tracking-tight text-foreground">Catat Hutang Baru</p>
-        <p className="text-sm font-semibold text-muted-foreground">Rekam belanja hutang dari pelanggan.</p>
+    <div className="flex flex-col gap-0">
+      <div className="px-5 pb-3">
+        <p className="text-xl font-black tracking-tight text-foreground">Catat Hutang Baru</p>
+        <p className="text-xs font-semibold text-muted-foreground mt-0.5">Rekam belanja hutang dari pelanggan.</p>
       </div>
-      <div className="grid gap-4">
-        <Label className="grid gap-2">
-          Pilih pelanggan
-          <SelectField defaultValue="Bu Sari">{customers.map((customer) => <option key={customer.id}>{customer.name}</option>)}</SelectField>
+      <div className="px-5 grid gap-3">
+        <Label className="grid gap-1.5">
+          Pilih Pelanggan
+          <SelectField value={customer} onChange={e => setCustomer(e.target.value)}>
+            {customers.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+          </SelectField>
         </Label>
-        <Label className="grid gap-2">
-          Pilih barang
-          <SelectField defaultValue="Beras Ramos 5kg">{products.map((product) => <option key={product.id}>{product.name}</option>)}</SelectField>
+        <Label className="grid gap-1.5">
+          Barang (opsional)
+          <SelectField value={product} onChange={e => setProduct(e.target.value)}>
+            <option value="">-- Pilih Barang --</option>
+            {products.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+          </SelectField>
         </Label>
-        <Label className="grid gap-2">
-          Total hutang
-          <Input placeholder="Rp0" className="rounded-xl" />
+        <Label className="grid gap-1.5">
+          Total Hutang
+          <Input inputMode="numeric" placeholder="Rp 0" value={amount} onChange={e => setAmount(e.target.value)} className="rounded-xl h-11" />
         </Label>
-        <Label className="grid gap-2">
-          Jatuh tempo
-          <Input type="date" className="rounded-xl" />
+        <Label className="grid gap-1.5">
+          Jatuh Tempo
+          <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="rounded-xl h-11" />
         </Label>
-        <Label className="grid gap-2">
+        <Label className="grid gap-1.5">
           Catatan
-          <Textarea placeholder="Catatan tambahan" className="rounded-xl" />
+          <Textarea placeholder="Catatan tambahan..." value={note} onChange={e => setNote(e.target.value)} className="rounded-xl" />
         </Label>
       </div>
-      <Button size="lg" className="rounded-xl h-12 text-sm font-black mt-2" onClick={onSave}>
-        Simpan Hutang
-      </Button>
+      <div className="px-5 pt-4 pb-5 mt-2 border-t bg-white sticky bottom-0">
+        <Button size="lg" className="w-full rounded-xl h-12 text-sm font-black" onClick={handleSubmit}>
+          Simpan Hutang
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function FormPelanggan({ onSave }: { onSave: () => void }) {
+  const [name, setName] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
+  const [type, setType] = useState("eceran");
+  const [address, setAddress] = useState("");
+  const [debtLimit, setDebtLimit] = useState("500000");
+
+  const handleSubmit = async () => {
+    if (!name || !whatsapp) {
+      alert("Nama dan nomor WhatsApp wajib diisi!");
+      return;
+    }
+    const raw = whatsapp.replace(/[^0-9]/g, "");
+    const phone = raw.startsWith("0") ? `+62${raw.slice(1)}` : `+62${raw}`;
+    const newCustomer = {
+      id: `C-${Math.floor(1000 + Math.random() * 9000)}`,
+      name,
+      whatsapp: phone,
+      type,
+      address,
+      debtLimit: Number(debtLimit) || 500000,
+      totalSpend: 0,
+    };
+    await saveSupabaseCustomer(newCustomer as any);
+    onSave();
+  };
+
+  return (
+    <div className="flex flex-col gap-0">
+      <div className="px-5 pb-3">
+        <p className="text-xl font-black tracking-tight text-foreground">Tambah Pelanggan</p>
+        <p className="text-xs font-semibold text-muted-foreground mt-0.5">Daftarkan pelanggan baru ke TokoAyu.</p>
+      </div>
+      <div className="px-5 grid gap-3">
+        <Label className="grid gap-1.5">
+          Nama Pelanggan
+          <Input placeholder="Bu Sari" value={name} onChange={e => setName(e.target.value)} className="rounded-xl h-11" />
+        </Label>
+        <Label className="grid gap-1.5">
+          Nomor WhatsApp
+          <Input inputMode="tel" placeholder="081234567890" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="rounded-xl h-11" />
+        </Label>
+        <Label className="grid gap-1.5">
+          Tipe Pelanggan
+          <SelectField value={type} onChange={e => setType(e.target.value)}>
+            <option value="eceran">Eceran (Retail)</option>
+            <option value="grosir">Grosir (Wholesale)</option>
+          </SelectField>
+        </Label>
+        <Label className="grid gap-1.5">
+          Alamat
+          <Textarea placeholder="Jl. Merpati No. 12..." value={address} onChange={e => setAddress(e.target.value)} className="rounded-xl" />
+        </Label>
+        <Label className="grid gap-1.5">
+          Limit Hutang (Rp)
+          <Input type="number" inputMode="numeric" placeholder="500000" value={debtLimit} onChange={e => setDebtLimit(e.target.value)} className="rounded-xl h-11" />
+        </Label>
+      </div>
+      <div className="px-5 pt-4 pb-5 mt-2 border-t bg-white sticky bottom-0">
+        <Button size="lg" className="w-full rounded-xl h-12 text-sm font-black" onClick={handleSubmit}>
+          Simpan Pelanggan
+        </Button>
+      </div>
     </div>
   );
 }

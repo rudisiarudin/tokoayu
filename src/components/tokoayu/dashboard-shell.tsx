@@ -28,15 +28,15 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: Home },
-  { href: "/dashboard/kasir", label: "Kasir POS", icon: ShoppingBasket },
-  { href: "/dashboard/barang", label: "Inventory", icon: Archive },
-  { href: "/dashboard/pelanggan", label: "Pelanggan", icon: Users },
-  { href: "/dashboard/hutang", label: "Catatan Hutang", icon: WalletCards },
-  { href: "/dashboard/belanja-stok", label: "Belanja Stok", icon: PackagePlus },
-  { href: "/dashboard/promo", label: "Promo & Diskon", icon: BadgePercent },
-  { href: "/dashboard/laporan", label: "Laporan Keuangan", icon: BarChart3 },
-  { href: "/dashboard/pengaturan", label: "Pengaturan", icon: Settings },
+  { href: "/dashboard", label: "Dashboard", shortLabel: "Home", icon: Home },
+  { href: "/dashboard/kasir", label: "Kasir POS", shortLabel: "Kasir", icon: ShoppingBasket },
+  { href: "/dashboard/barang", label: "Inventory", shortLabel: "Barang", icon: Archive },
+  { href: "/dashboard/pelanggan", label: "Pelanggan", shortLabel: "Pelanggan", icon: Users },
+  { href: "/dashboard/hutang", label: "Catatan Hutang", shortLabel: "Hutang", icon: WalletCards },
+  { href: "/dashboard/belanja-stok", label: "Belanja Stok", shortLabel: "Stok", icon: PackagePlus },
+  { href: "/dashboard/promo", label: "Promo & Diskon", shortLabel: "Promo", icon: BadgePercent },
+  { href: "/dashboard/laporan", label: "Laporan Keuangan", shortLabel: "Laporan", icon: BarChart3 },
+  { href: "/dashboard/pengaturan", label: "Pengaturan", shortLabel: "Setelan", icon: Settings },
 ];
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -224,21 +224,22 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
 
-        {/* MOBILE BOTTOM NAVIGATION */}
-        <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t bg-white/95 p-2 shadow-2xl backdrop-blur lg:hidden">
-          {navItems.slice(0, 5).map((item) => {
+        {/* MOBILE BOTTOM NAVIGATION - scrollable, all items */}
+        <nav className="fixed inset-x-0 bottom-0 z-40 flex overflow-x-auto border-t bg-white/95 px-1.5 py-1.5 shadow-2xl backdrop-blur lg:hidden gap-1 [&::-webkit-scrollbar]:hidden">
+          {navItems.map((item) => {
             const active = pathname === item.href;
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => setMobileOpen(false)}
                 className={cn(
-                  "grid min-h-14 place-items-center rounded-xl text-[11px] font-black text-muted-foreground",
+                  "flex min-w-[60px] flex-col items-center justify-center gap-0.5 rounded-xl px-2 min-h-[56px] text-[9.5px] font-black text-muted-foreground shrink-0 transition-colors",
                   active && "bg-emerald-600 text-white"
                 )}
               >
-                <item.icon size={21} />
-                {item.label}
+                <item.icon size={20} />
+                <span className="leading-tight text-center">{item.shortLabel}</span>
               </Link>
             );
           })}
