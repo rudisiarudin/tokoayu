@@ -7,7 +7,10 @@ import {
   BarChart3,
   Camera,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Droplet,
+  Edit,
   FileDown,
   Minus,
   Package,
@@ -18,6 +21,9 @@ import {
   Send,
   Settings,
   ShoppingBasket,
+  Store,
+  Type,
+  Maximize2,
   Users,
 } from "lucide-react";
 import {
@@ -40,17 +46,21 @@ import { SelectField } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { customers, debts, products, promos, reportChart, type Product } from "@/lib/dummy-data";
+import { customers, debts, products, promos, type Product } from "@/lib/dummy-data";
 import { cn, rupiah } from "@/lib/utils";
 import {
   getSupabaseProducts,
   getSupabaseCustomers,
   getSupabaseDebts,
+  getSupabaseTransactions,
   saveSupabaseTransaction,
   updateSupabaseProduct,
   saveSupabaseCustomer,
   saveSupabaseDebt,
-  saveSupabaseProduct
+  saveSupabaseProduct,
+  updateSupabaseDebtStatus,
+  updateSupabaseProductFull,
+  updateSupabaseDebt
 } from "@/lib/supabase-sync";
 
 function loadHtml5QrcodeScript(): Promise<void> {
@@ -1058,6 +1068,16 @@ function BarangPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [localProducts, setLocalProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState("");
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
   
   // Scanner states for adding product
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -1318,11 +1338,24 @@ function BarangPage() {
     setScannedBarcode(""); // Reset
   };
 
+  const handleSaveEdit = async (updatedProduct: Product) => {
+    setLocalProducts((prev) => prev.map((p) => p.id === updatedProduct.id ? updatedProduct : p));
+    await updateSupabaseProductFull(updatedProduct);
+    setEditingProduct(null);
+    setScannedBarcode(""); // Reset
+  };
+
   const filtered = localProducts.filter(p => {
     const kw = search.trim().toLowerCase();
     if (!kw) return true;
     return p.name.toLowerCase().includes(kw) || p.barcode.includes(kw) || p.sku.toLowerCase().includes(kw);
   });
+
+  const totalItems = filtered.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+  const paginatedProducts = filtered.slice(startIndex, endIndex);
 
   return (
     <div className="grid gap-5">
@@ -1354,10 +1387,11 @@ function BarangPage() {
                 <TableHead>Harga</TableHead>
                 <TableHead>Stok</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="w-[100px] text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((product) => {
+              {paginatedProducts.map((product) => {
                 const low = product.stock <= product.minStock;
                 return (
                   <TableRow key={product.id}>
@@ -1374,12 +1408,22 @@ function BarangPage() {
                       <span className="text-xs font-semibold text-muted-foreground">{product.unit}</span>
                     </TableCell>
                     <TableCell>{low ? <Badge variant="danger">Stok menipis</Badge> : <Badge variant="success">Aman</Badge>}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 rounded-xl border border-emerald-50 hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700"
+                        onClick={() => setEditingProduct(product)}
+                      >
+                        <Edit size={16} />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 );
               })}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="p-6 text-center font-bold text-muted-foreground">
+                  <TableCell colSpan={5} className="p-6 text-center font-bold text-muted-foreground">
                     Barang tidak ditemukan.
                   </TableCell>
                 </TableRow>
@@ -1387,12 +1431,119 @@ function BarangPage() {
             </TableBody>
           </Table>
         </CardContent>
+
+        {/* Pagination Footer Controls */}
+        {totalItems > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t bg-slate-50/40">
+            {/* Pagination Info */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 text-xs font-semibold text-muted-foreground">
+              <span>
+                Menampilkan <span className="font-extrabold text-foreground">{totalItems === 0 ? 0 : startIndex + 1}</span> - <span className="font-extrabold text-foreground">{endIndex}</span> dari <span className="font-extrabold text-foreground">{totalItems}</span> barang
+              </span>
+              
+              {/* Dropdown Page Size */}
+              <div className="flex items-center gap-1.5">
+                <span>Baris per halaman:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="h-8 rounded-lg border border-slate-200 bg-white px-2 py-1 font-bold text-foreground focus-visible:ring-emerald-500 text-xs cursor-pointer outline-none hover:border-slate-300"
+                >
+                  {[5, 10, 25, 50].map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Page Navigation Controls */}
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 rounded-lg border-slate-200 text-foreground hover:bg-slate-50 disabled:opacity-50"
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft size={15} />
+              </Button>
+
+              {/* Numbered Page Buttons */}
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, idx) => {
+                  const pageNum = idx + 1;
+                  // Handle large total pages pagination ellipsis contracture
+                  if (
+                    totalPages > 5 &&
+                    pageNum !== 1 &&
+                    pageNum !== totalPages &&
+                    Math.abs(pageNum - currentPage) > 1
+                  ) {
+                    if (pageNum === 2 && currentPage > 3) {
+                      return <span key="dots-start" className="text-slate-300 px-1 text-xs">...</span>;
+                    }
+                    if (pageNum === totalPages - 1 && currentPage < totalPages - 2) {
+                      return <span key="dots-end" className="text-slate-300 px-1 text-xs">...</span>;
+                    }
+                    return null;
+                  }
+
+                  const isCurrent = currentPage === pageNum;
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={cn(
+                        "h-8 min-w-[32px] px-2 rounded-lg text-xs font-black transition duration-150 active:scale-[0.97]",
+                        isCurrent
+                          ? "bg-emerald-600 text-white shadow-sm"
+                          : "border border-slate-200 bg-white text-muted-foreground hover:text-foreground hover:border-slate-300"
+                      )}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 rounded-lg border-slate-200 text-foreground hover:bg-slate-50 disabled:opacity-50"
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+              >
+                <ChevronRight size={15} />
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       <Dialog open={addOpen}>
         <DialogContent onClose={() => setAddOpen(false)} className="max-w-2xl">
           <FormBarang 
             onSave={handleSave} 
+            onScanTrigger={() => setScannerOpen(true)} 
+            scannedBarcode={scannedBarcode} 
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingProduct}>
+        <DialogContent onClose={() => {
+          setEditingProduct(null);
+          setScannedBarcode("");
+        }} className="max-w-2xl">
+          <FormBarang 
+            key={editingProduct?.id || "edit-none"}
+            editingProduct={editingProduct}
+            onSave={handleSaveEdit} 
             onScanTrigger={() => setScannerOpen(true)} 
             scannedBarcode={scannedBarcode} 
           />
@@ -1570,15 +1721,74 @@ function PelangganPage() {
 
 function HutangPage() {
   const [addOpen, setAddOpen] = useState(false);
+  const [localDebts, setLocalDebts] = useState(debts);
+  const [liveCustomers, setLiveCustomers] = useState<any[]>([]);
+
+  // installment states
+  const [cicilDebt, setCicilDebt] = useState<any | null>(null);
+  const [cicilAmount, setCicilAmount] = useState("");
+  const [cicilNote, setCicilNote] = useState("");
+
+  useEffect(() => {
+    getSupabaseDebts().then(data => { if (data.length > 0) setLocalDebts(data); });
+    getSupabaseCustomers().then(data => { if (data.length > 0) setLiveCustomers(data); });
+  }, []);
+
+  const reload = () => {
+    getSupabaseDebts().then(data => { if (data.length > 0) setLocalDebts(data); });
+    getSupabaseCustomers().then(data => { if (data.length > 0) setLiveCustomers(data); });
+  };
+
+  const handleSettleDebt = async (id: string) => {
+    setLocalDebts(prev => prev.map(d => d.id === id ? { ...d, status: "lunas" } : d));
+    await updateSupabaseDebtStatus(id, "lunas");
+    reload();
+  };
+
+  const handleCicilPayment = async () => {
+    if (!cicilDebt || !cicilAmount) return;
+    const payVal = Number(cicilAmount);
+    if (payVal <= 0) {
+      alert("Nominal pembayaran cicilan harus lebih besar dari 0!");
+      return;
+    }
+    if (payVal > cicilDebt.amount) {
+      alert("Nominal pembayaran cicilan melebihi sisa hutang saat ini!");
+      return;
+    }
+
+    const remaining = cicilDebt.amount - payVal;
+    const newStatus = remaining <= 0 ? ("lunas" as const) : ("belum lunas" as const);
+    
+    // Create detailed note
+    const payStr = `Cicil ${rupiah(payVal)}`;
+    const addedNote = cicilNote ? ` - ${cicilNote}` : "";
+    const newNote = cicilDebt.note 
+      ? `${cicilDebt.note} (${payStr}${addedNote})` 
+      : `${payStr}${addedNote}`;
+
+    // Optimistic UI update
+    setLocalDebts(prev => prev.map(d => d.id === cicilDebt.id ? { ...d, amount: remaining, status: newStatus, note: newNote } : d));
+    
+    await updateSupabaseDebt(cicilDebt.id, remaining, newStatus, newNote);
+    
+    setCicilDebt(null);
+    setCicilAmount("");
+    setCicilNote("");
+    reload();
+    alert(`Pembayaran cicilan sebesar ${rupiah(payVal)} berhasil dicatat!`);
+  };
 
   const sendDebtReminder = (customerName: string, amount: number, dueDate: string) => {
-    const customer = customers.find(c => c.name === customerName);
+    const customer = liveCustomers.find(c => c.name === customerName) || customers.find(c => c.name === customerName);
     const phone = customer ? customer.whatsapp : "";
+    if (!phone) {
+      alert(`Nomor WhatsApp untuk ${customerName} tidak ditemukan. Silakan tambahkan pelanggan dengan nomor WhatsApp terlebih dahulu.`);
+      return;
+    }
     const text = `*PENGINGAT TAGIHAN TOKOAYU*\nHalo, Kak *${customerName}*.\n\nKami ingin menginformasikan sisa tagihan belanja Anda di TokoAyu sebesar *${rupiah(amount)}* yang jatuh tempo pada *${dueDate}*.\n\nMohon untuk melakukan penyelesaian pembayaran. Terima kasih banyak atas kepercayaan Anda berbelanja di TokoAyu! 🙏🛒`;
-    
     const cleanPhone = phone.replace(/[^0-9]/g, "");
     const finalPhone = cleanPhone.startsWith("0") ? "62" + cleanPhone.slice(1) : cleanPhone;
-    
     window.open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(text)}`, "_blank");
   };
 
@@ -1588,7 +1798,7 @@ function HutangPage() {
         <div className="flex items-center justify-between p-5">
           <div>
             <p className="text-base font-black text-foreground">Catat & tagih hutang pelanggan</p>
-            <p className="text-xs font-semibold text-muted-foreground">Kirim pengingat langsung ke nomor WhatsApp.</p>
+            <p className="text-xs font-semibold text-muted-foreground">Kirim pengingat WhatsApp, bayar cicilan, atau tandai lunas.</p>
           </div>
           <Button className="rounded-xl shadow-md text-sm font-extrabold" onClick={() => setAddOpen(true)}>
             <Plus size={20} /> Catat Hutang
@@ -1596,30 +1806,264 @@ function HutangPage() {
         </div>
       </Card>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {debts.map((debt) => (
-          <Card key={debt.id} className="rounded-2xl border bg-white shadow-sm transition hover:shadow-md hover:scale-[1.01]">
-            <div className="grid gap-4 p-5">
-              <div className="flex items-start justify-between gap-2 border-b border-dashed pb-2.5">
-                <div>
-                  <p className="text-lg font-black text-foreground">{debt.customer}</p>
-                  <p className="text-xs font-semibold text-muted-foreground">Jatuh tempo {debt.dueDate}</p>
+        {localDebts.map((debt) => {
+          const isLunas = debt.status === "lunas";
+          return (
+            <Card key={debt.id} className={cn(
+              "rounded-2xl border bg-white shadow-sm transition hover:shadow-md hover:scale-[1.01] overflow-hidden flex flex-col justify-between",
+              isLunas && "border-emerald-100 bg-emerald-50/5"
+            )}>
+              <div className="grid gap-4 p-5">
+                <div className="flex items-start justify-between gap-2 border-b border-dashed pb-2.5">
+                  <div>
+                    <p className="text-lg font-black text-foreground">{debt.customer}</p>
+                    <p className="text-xs font-semibold text-muted-foreground">Jatuh tempo {debt.dueDate}</p>
+                  </div>
+                  <Badge variant={isLunas ? "success" : "danger"}>
+                    {debt.status}
+                  </Badge>
                 </div>
-                <Badge variant={debt.status === "belum lunas" ? "danger" : "warning"}>{debt.status}</Badge>
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground">Sisa Hutang</p>
+                  <p className={cn(
+                    "text-3xl font-black tracking-tight",
+                    isLunas ? "text-emerald-600 line-through opacity-75" : "text-red-600"
+                  )}>{rupiah(debt.amount)}</p>
+                </div>
+                {debt.note && (
+                  <p className="text-xs font-semibold text-muted-foreground bg-slate-50 border border-slate-100 p-2.5 rounded-xl leading-relaxed">
+                    Catatan: {debt.note}
+                  </p>
+                )}
+                
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {!isLunas ? (
+                    <>
+                      <Button
+                        className="rounded-xl h-11 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm col-span-2"
+                        onClick={() => handleSettleDebt(debt.id)}
+                      >
+                        Tandai Lunas
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="rounded-xl h-11 text-xs font-extrabold border-slate-200 text-foreground hover:bg-slate-50"
+                        onClick={() => setCicilDebt(debt)}
+                      >
+                        Bayar Cicilan
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="rounded-xl h-11 text-xs font-extrabold border-slate-200 text-slate-700 hover:bg-slate-50"
+                        onClick={() => sendDebtReminder(debt.customer, debt.amount, debt.dueDate)}
+                      >
+                        <Send size={14} /> Ingatkan WA
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      disabled
+                      className="rounded-xl h-11 text-xs font-extrabold bg-emerald-100 text-emerald-700 border-none shadow-none cursor-default opacity-85 col-span-2"
+                    >
+                      ✓ Sudah Lunas
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+        {localDebts.length === 0 && (
+          <div className="md:col-span-2 xl:col-span-3 rounded-2xl border border-dashed p-10 text-center font-bold text-muted-foreground">
+            Belum ada catatan hutang.
+          </div>
+        )}
+      </div>
+
+      <Dialog open={addOpen}>
+        <DialogContent onClose={() => setAddOpen(false)}>
+          <FormHutang liveCustomers={liveCustomers} onSave={() => { reload(); setAddOpen(false); }} />
+        </DialogContent>
+      </Dialog>
+
+      {/* dialog cicilan */}
+      <Dialog open={!!cicilDebt}>
+        <DialogContent onClose={() => { setCicilDebt(null); setCicilAmount(""); setCicilNote(""); }} className="max-w-md">
+          <div className="flex flex-col gap-0">
+            <div className="px-5 pb-3">
+              <p className="text-xl font-black tracking-tight text-foreground">Bayar Cicilan Hutang</p>
+              <p className="text-xs font-semibold text-muted-foreground mt-0.5">Catat pembayaran angsuran dari pelanggan.</p>
+            </div>
+            <div className="px-5 grid gap-4">
+              <div className="rounded-xl bg-slate-50 border p-3.5 flex flex-col gap-1">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase">Pelanggan</span>
+                <span className="text-base font-extrabold text-foreground">{cicilDebt?.customer}</span>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase mt-2">Sisa Hutang Saat Ini</span>
+                <span className="text-2xl font-black text-red-600">{rupiah(cicilDebt?.amount ?? 0)}</span>
+              </div>
+              <Label className="grid gap-1.5 text-sm font-extrabold text-muted-foreground">
+                Nominal Pembayaran Cicilan
+                <Input 
+                  type="number"
+                  inputMode="numeric" 
+                  placeholder="Masukkan nominal (contoh: 20000)" 
+                  value={cicilAmount} 
+                  onChange={e => setCicilAmount(e.target.value)} 
+                  className="rounded-xl h-11 font-semibold focus-visible:ring-emerald-500" 
+                />
+              </Label>
+              <Label className="grid gap-1.5 text-sm font-extrabold text-muted-foreground">
+                Catatan Tambahan (opsional)
+                <Input 
+                  placeholder="Contoh: Titip lewat Bu RT, Bayar ke-2" 
+                  value={cicilNote} 
+                  onChange={e => setCicilNote(e.target.value)} 
+                  className="rounded-xl h-11 font-semibold focus-visible:ring-emerald-500" 
+                />
+              </Label>
+            </div>
+            <div className="px-5 pt-4 pb-5 mt-4 border-t bg-white sticky bottom-0 flex gap-2.5">
+              <Button variant="outline" className="rounded-xl h-12 text-sm font-black flex-1" onClick={() => { setCicilDebt(null); setCicilAmount(""); setCicilNote(""); }}>
+                Batal
+              </Button>
+              <Button className="rounded-xl h-12 text-sm font-black flex-1" onClick={handleCicilPayment}>
+                Bayar Cicilan
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function BelanjaStokPage() {
+  const [allProducts, setAllProducts] = useState(products);
+
+  useEffect(() => {
+    getSupabaseProducts().then(data => { if (data.length > 0) setAllProducts(data); });
+  }, []);
+
+  const lowStock = allProducts.filter((item) => item.stock <= item.minStock);
+
+  function StockRestockCard({ product, onUpdated }: { product: any, onUpdated: (p: any) => void }) {
+    const [stok, setStok] = useState("");
+    const [harga, setHarga] = useState("");
+    const [loading, setLoading] = useState(false);
+
+    const handleSave = async () => {
+      setLoading(true);
+      const updated = { ...product, stock: product.stock + Number(stok), buyPrice: Number(harga) || product.buyPrice };
+      await updateSupabaseProduct(updated);
+      onUpdated(updated);
+      setLoading(false);
+    };
+
+    return (
+      <Card className="rounded-2xl border bg-white shadow-sm">
+        <div className="grid gap-4 p-6 md:grid-cols-[1fr_280px] md:items-center">
+          <div>
+            <p className="text-xl font-black text-foreground">{product.name}</p>
+            <p className="mt-1 text-sm font-semibold text-muted-foreground">
+              Stok {product.stock}, minimum {product.minStock}. Saran beli <span className="font-extrabold text-foreground">{Math.max(product.minStock * 2 - product.stock, product.minStock)} {product.unit}</span>.
+            </p>
+          </div>
+          <div className="grid gap-2 border-t pt-3 md:border-t-0 md:pt-0">
+            <Input type="number" placeholder="Stok masuk" value={stok} onChange={(e) => setStok(e.target.value)} className="rounded-xl" />
+            <Input type="number" placeholder="Harga beli baru" value={harga} onChange={(e) => setHarga(e.target.value)} className="rounded-xl" />
+            <Button disabled={loading || !stok} onClick={handleSave} className="rounded-xl text-sm font-black">
+              {loading ? "Menyimpan..." : "Tandai Sudah Dibeli"}
+            </Button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid gap-4">
+      {lowStock.length === 0 && (
+        <div className="rounded-2xl border border-dashed p-10 text-center">
+          <p className="text-2xl mb-2">✅</p>
+          <p className="font-black text-foreground">Semua stok aman!</p>
+          <p className="text-sm font-semibold text-muted-foreground mt-1">Tidak ada barang yang perlu dibeli ulang saat ini.</p>
+        </div>
+      )}
+      {lowStock.map((product) => (
+        <StockRestockCard
+          key={product.id}
+          product={product}
+          onUpdated={(updated) =>
+            setAllProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+function PromoPage() {
+  const [localPromos, setLocalPromos] = useState(promos);
+  const [addOpen, setAddOpen] = useState(false);
+  const [newPromo, setNewPromo] = useState({ name: "", type: "Diskon", price: "" });
+
+  const sharePromo = (name: string, price: number) => {
+    const text = `*PROMO MENARIK TOKOAYU!* 🎉\nDapatkan *${name}* seharga hanya *${rupiah(price)}*!\n\nBuruan belanja sekarang di TokoAyu sebelum kehabisan! 🛒`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+  };
+
+  const handleAddPromo = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPromo.name || !newPromo.price) return;
+    setLocalPromos([
+      ...localPromos,
+      {
+        name: newPromo.name,
+        type: newPromo.type,
+        price: Number(newPromo.price),
+        active: true,
+      },
+    ]);
+    setNewPromo({ name: "", type: "Diskon", price: "" });
+    setAddOpen(false);
+  };
+
+  return (
+    <div className="grid gap-5">
+      <Card className="pos-card rounded-2xl bg-white p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-black text-foreground">Promo Aktif Warung</h2>
+            <p className="text-xs font-semibold text-muted-foreground mt-0.5">Sebarkan promo barang via WhatsApp ke pelanggan setia.</p>
+          </div>
+          <Button className="rounded-xl shadow-md text-sm font-extrabold" onClick={() => setAddOpen(true)}>
+            <Plus size={20} /> Buat Promo Baru
+          </Button>
+        </div>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {localPromos.map((promo) => (
+          <Card key={promo.name} className="rounded-2xl border bg-white shadow-sm transition hover:shadow-md hover:scale-[1.01] overflow-hidden">
+            <div className="grid gap-4 p-6">
+              <div className="flex items-center justify-between border-b pb-2.5">
+                <Badge variant="success">Aktif</Badge>
+                <BadgePercent className="text-primary" size={24} />
               </div>
               <div>
-                <p className="text-xs font-bold text-muted-foreground">Total Hutang</p>
-                <p className="text-3xl font-black tracking-tight text-red-600">{rupiah(debt.amount)}</p>
+                <p className="text-xl font-black text-foreground">{promo.name}</p>
+                <p className="text-xs font-semibold text-muted-foreground">{promo.type}</p>
               </div>
-              {debt.note && (
-                <p className="text-xs font-semibold text-muted-foreground bg-muted p-2 rounded-lg">
-                  Catatan: {debt.note}
-                </p>
-              )}
+              <div>
+                <p className="text-xs font-bold text-muted-foreground">Harga Promo</p>
+                <p className="text-2xl font-black text-primary">{rupiah(promo.price)}</p>
+              </div>
               <Button
-                className="rounded-xl h-11 text-xs font-extrabold bg-emerald-500/10 text-primary border-emerald-100 hover:bg-emerald-100 mt-2"
-                onClick={() => sendDebtReminder(debt.customer, debt.amount, debt.dueDate)}
+                variant="outline"
+                className="rounded-xl border-emerald-100 text-sm font-bold hover:bg-emerald-50 mt-2"
+                onClick={() => sharePromo(promo.name, promo.price)}
               >
-                <Send size={16} /> Ingatkan WhatsApp
+                <Send size={18} /> Kirim WhatsApp
               </Button>
             </div>
           </Card>
@@ -1628,216 +2072,552 @@ function HutangPage() {
 
       <Dialog open={addOpen}>
         <DialogContent onClose={() => setAddOpen(false)}>
-          <FormHutang onSave={() => setAddOpen(false)} />
+          <form onSubmit={handleAddPromo} className="grid gap-4 p-5 pt-1">
+            <div>
+              <p className="text-2xl font-black tracking-tight">Buat Promo Baru</p>
+              <p className="font-semibold text-muted-foreground">Isi detail promo barang untuk disebarkan.</p>
+            </div>
+            
+            <div className="grid gap-3">
+              <Label className="grid gap-1.5">
+                Nama Promo / Barang
+                <Input
+                  required
+                  placeholder="Contoh: Indomie Soto 1 Kardus"
+                  value={newPromo.name}
+                  onChange={(e) => setNewPromo({ ...newPromo, name: e.target.value })}
+                  className="rounded-xl"
+                />
+              </Label>
+
+              <Label className="grid gap-1.5">
+                Tipe Promo
+                <SelectField
+                  value={newPromo.type}
+                  onChange={(e) => setNewPromo({ ...newPromo, type: e.target.value })}
+                >
+                  <option value="Diskon">Diskon</option>
+                  <option value="Paket">Paket Hemat</option>
+                  <option value="Grosir">Grosir</option>
+                  <option value="Bonus">Bonus</option>
+                </SelectField>
+              </Label>
+
+              <Label className="grid gap-1.5">
+                Harga Promo (Rupiah)
+                <Input
+                  required
+                  type="number"
+                  placeholder="Contoh: 110000"
+                  value={newPromo.price}
+                  onChange={(e) => setNewPromo({ ...newPromo, price: e.target.value })}
+                  className="rounded-xl"
+                />
+              </Label>
+            </div>
+
+            <Button type="submit" className="rounded-xl h-12 text-sm font-black mt-2">
+              Simpan & Aktifkan Promo
+            </Button>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
 
-function BelanjaStokPage() {
-  const lowStock = products.filter((item) => item.stock <= item.minStock);
+function LaporanPage() {
+  const [txData, setTxData] = useState<any[]>([]);
+  const [localDebts, setLocalDebts] = useState(debts);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      const [txs, dbtData] = await Promise.all([
+        getSupabaseTransactions(),
+        getSupabaseDebts(),
+      ]);
+      setTxData(txs);
+      if (dbtData.length > 0) setLocalDebts(dbtData);
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  // Compute stats from real data
+  const totalOmzet = txData.reduce((sum, tx) => sum + (Number(tx.total) || 0), 0);
+  const totalProfit = txData.reduce((sum, tx) => sum + (Number(tx.profit) || 0), 0);
+  const totalDebt = localDebts.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+
+  // Build last 7 days chart + table from real transactions
+  const last7 = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (6 - i));
+    const dateStr = date.toISOString().split("T")[0];
+    const dayLabel = date.toLocaleDateString("id-ID", { weekday: "short" });
+    const fullLabel = date.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "short" });
+    const dayTxs = txData.filter(tx => (tx.created_at || "").startsWith(dateStr));
+    const omzet = dayTxs.reduce((s, tx) => s + (Number(tx.total) || 0), 0);
+    const untung = dayTxs.reduce((s, tx) => s + (Number(tx.profit) || 0), 0);
+    return { day: dayLabel, fullLabel, omzet, untung, transactions: dayTxs.length };
+  });
+
   return (
-    <div className="grid gap-4">
-      {lowStock.map((product) => (
-        <Card key={product.id} className="rounded-2xl border bg-white shadow-sm">
-          <div className="grid gap-4 p-6 md:grid-cols-[1fr_280px] md:items-center">
-            <div>
-              <p className="text-xl font-black text-foreground">{product.name}</p>
-              <p className="mt-1 text-sm font-semibold text-muted-foreground">
-                Stok {product.stock}, minimum {product.minStock}. Saran beli <span className="font-extrabold text-foreground">{Math.max(product.minStock * 2 - product.stock, product.minStock)} {product.unit}</span>.
-              </p>
-              <Badge variant="warning" className="mt-3">Cek harga jual jika harga beli naik</Badge>
-            </div>
-            <div className="grid gap-2 border-t pt-3 md:border-t-0 md:pt-0">
-              <Input placeholder="Stok masuk" className="rounded-xl" />
-              <Input placeholder="Harga beli baru" className="rounded-xl" />
-              <Button className="rounded-xl text-sm font-black">Tandai Sudah Dibeli</Button>
-            </div>
+    <div className="grid gap-5">
+      {loading ? (
+        <div className="rounded-2xl border bg-white p-10 text-center animate-pulse">
+          <p className="font-black text-muted-foreground">⏳ Memuat data laporan dari database...</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-4 md:grid-cols-3">
+            <MiniStat title="Total Omzet" value={rupiah(totalOmzet)} />
+            <MiniStat title="Total Keuntungan" value={rupiah(totalProfit)} tone="warning" />
+            <MiniStat title="Hutang Belum Lunas" value={rupiah(totalDebt)} tone="danger" />
           </div>
-        </Card>
-      ))}
+
+          <Card className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-b">
+              <CardTitle className="flex items-center gap-2 text-base font-black">
+                <BarChart3 size={22} className="text-primary" /> Grafik 7 Hari Terakhir
+              </CardTitle>
+              <p className="text-xs font-semibold text-muted-foreground">{txData.length} transaksi tercatat</p>
+            </CardHeader>
+            <CardContent className="h-80 p-5">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={last7}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="day" />
+                  <YAxis tickFormatter={(v) => `${Number(v) / 1000}rb`} />
+                  <Tooltip formatter={(v) => rupiah(Number(v))} />
+                  <Legend />
+                  <Bar dataKey="omzet" fill="#147a47" name="Omzet" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="untung" fill="#f59e0b" name="Untung" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+            <CardHeader className="px-5 py-4 border-b">
+              <CardTitle className="text-base font-black text-foreground flex items-center gap-2">
+                <Users size={19} className="text-emerald-600" /> Rincian Penjualan 7 Hari Terakhir
+              </CardTitle>
+            </CardHeader>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40 font-extrabold text-muted-foreground uppercase text-[10px] tracking-wider">
+                    <th className="px-5 py-4">Tanggal</th>
+                    <th className="px-5 py-4 text-center">Transaksi</th>
+                    <th className="px-5 py-4 text-right">Omzet</th>
+                    <th className="px-5 py-4 text-right">Keuntungan</th>
+                    <th className="px-5 py-4 text-center">Margin %</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {last7.map((row) => {
+                    const margin = row.omzet > 0 ? ((row.untung / row.omzet) * 100).toFixed(1) : "0.0";
+                    return (
+                      <tr key={row.fullLabel} className="hover:bg-muted/10 transition-colors">
+                        <td className="px-5 py-4 font-black text-foreground">{row.fullLabel}</td>
+                        <td className="px-5 py-4 text-center font-bold text-muted-foreground">
+                          {row.transactions > 0 ? `${row.transactions} kali` : <span className="text-muted-foreground/50">—</span>}
+                        </td>
+                        <td className="px-5 py-4 text-right font-black text-foreground">
+                          {row.omzet > 0 ? rupiah(row.omzet) : <span className="text-muted-foreground/50">—</span>}
+                        </td>
+                        <td className="px-5 py-4 text-right font-black text-emerald-600">
+                          {row.untung > 0 ? rupiah(row.untung) : <span className="text-muted-foreground/50">—</span>}
+                        </td>
+                        <td className="px-5 py-4 text-center font-extrabold text-muted-foreground">{margin}%</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      )}
     </div>
   );
 }
 
-function PromoPage() {
-  const sharePromo = (name: string, price: number) => {
-    const text = `*PROMO MENARIK TOKOAYU!* 🎉\nDapatkan *${name}* seharga hanya *${rupiah(price)}*!\n\nBuruan belanja sekarang di TokoAyu sebelum kehabisan! 🛒`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+
+
+function PengaturanPage() {
+  const [activeTab, setActiveTab] = useState<"store" | "display">("store");
+
+  // Warung Settings
+  const [shopName, setShopName] = useState("TokoAyu");
+  const [shopAddress, setShopAddress] = useState("Jl. Anggrek Raya No. 42");
+  const [shopPhone, setShopPhone] = useState("08123456789");
+  const [printerName, setPrinterName] = useState("Thermal 58mm");
+  const [taxRate, setTaxRate] = useState("0");
+
+  // Display Settings
+  const [activeFontFamily, setActiveFontFamily] = useState("default");
+  const [activeFontSize, setActiveFontSize] = useState("16px");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setShopName(localStorage.getItem("tokoayu-shop-name") || "TokoAyu");
+      setShopAddress(localStorage.getItem("tokoayu-shop-address") || "Jl. Anggrek Raya No. 42");
+      setShopPhone(localStorage.getItem("tokoayu-shop-phone") || "08123456789");
+      setPrinterName(localStorage.getItem("tokoayu-printer-name") || "Thermal 58mm");
+      setTaxRate(localStorage.getItem("tokoayu-tax-rate") || "0");
+
+      setActiveFontFamily(localStorage.getItem("tokoayu-font-family-name") || "default");
+      setActiveFontSize(localStorage.getItem("tokoayu-font-size") || "16px");
+    }
+  }, []);
+
+  const saveWarungSettings = () => {
+    localStorage.setItem("tokoayu-shop-name", shopName);
+    localStorage.setItem("tokoayu-shop-address", shopAddress);
+    localStorage.setItem("tokoayu-shop-phone", shopPhone);
+    localStorage.setItem("tokoayu-printer-name", printerName);
+    localStorage.setItem("tokoayu-tax-rate", taxRate);
+    
+    // Dispatch a global event so layout shell can sync if needed
+    window.dispatchEvent(new Event("tokoayu-settings-saved"));
+    alert("✓ Pengaturan operasional toko berhasil disimpan secara aman!");
+  };
+
+  const fonts = [
+    { 
+      name: "Modern Jakarta (Default)", 
+      value: "default", 
+      css: 'var(--font-jakarta), "Plus Jakarta Sans", sans-serif',
+      desc: "Font bawaan dengan gaya semi-rounded modern yang profesional." 
+    },
+    { 
+      name: "Sleek Sans (Inter)", 
+      value: "inter", 
+      css: "'Inter', sans-serif",
+      desc: "Font sans-serif paling populer. Karakter bersih, profesional, dan sangat tajam." 
+    },
+    { 
+      name: "Geometric (Outfit)", 
+      value: "outfit", 
+      css: "'Outfit', sans-serif",
+      desc: "Gaya geometris modern dengan lengkungan elegan, memberikan kesan premium." 
+    },
+    { 
+      name: "Soft Rounded (Quicksand)", 
+      value: "quicksand", 
+      css: "'Quicksand', sans-serif",
+      desc: "Karakter membulat yang lembut dan ramah, nyaman dipandang berjam-jam." 
+    },
+    { 
+      name: "Playful Store (Fredoka)", 
+      value: "fredoka", 
+      css: "'Fredoka', sans-serif",
+      desc: "Sangat kasual dan ramah. Memberikan vibes warung kekinian yang akrab." 
+    },
+    { 
+      name: "Traditional Serif (Lora)", 
+      value: "lora", 
+      css: "'Lora', serif",
+      desc: "Tipe huruf serif yang artistik dengan detail sapuan pen yang indah." 
+    },
+    { 
+      name: "Elegant Display (Playfair)", 
+      value: "playfair", 
+      css: "'Playfair Display', serif",
+      desc: "Font luxury/butik kelas atas dengan kontras garis tebal-tipis yang tajam." 
+    },
+    { 
+      name: "Developer Mono (JetBrains)", 
+      value: "jetbrains", 
+      css: "'JetBrains Mono', monospace",
+      desc: "Teks seragam bergaya koding. Sangat presisi untuk membaca deretan angka." 
+    },
+    { 
+      name: "Tech Cashier (Fira Code)", 
+      value: "firacode", 
+      css: "'Fira Code', monospace",
+      desc: "Teks monospaced modern dengan tingkat keterbacaan data kasir yang super tinggi." 
+    }
+  ];
+
+  const fontSizes = [
+    { name: "Kecil (14px)", value: "14px", desc: "Sangat ringkas untuk memuat banyak data transaksi sekaligus." },
+    { name: "Normal (16px)", value: "16px", desc: "Ukuran standar bawaan aplikasi yang optimal untuk layar medium." },
+    { name: "Besar (18px)", value: "18px", desc: "Ukuran besar yang nyaman dibaca dengan cepat saat melayani antrean." },
+    { name: "Sangat Besar (20px)", value: "20px", desc: "Super kontras dan tebal. Sangat ramah untuk pengguna lanjut usia." }
+  ];
+
+  const changeFontFamily = (val: string) => {
+    const selected = fonts.find(f => f.value === val);
+    if (!selected) return;
+    setActiveFontFamily(val);
+    localStorage.setItem("tokoayu-font-family-name", val);
+    localStorage.setItem("tokoayu-font-family", selected.css);
+    document.documentElement.style.setProperty("--app-font-family", selected.css);
+  };
+
+  const changeFontSize = (val: string) => {
+    setActiveFontSize(val);
+    localStorage.setItem("tokoayu-font-size", val);
+    document.documentElement.style.setProperty("--app-font-size", val);
   };
 
   return (
-    <div className="grid gap-4 md:grid-cols-3">
-      {promos.map((promo) => (
-        <Card key={promo.name} className="rounded-2xl border bg-white shadow-sm transition hover:shadow-md hover:scale-[1.01]">
-          <div className="grid gap-4 p-6">
-            <div className="flex items-center justify-between border-b pb-2.5">
-              <Badge variant="success">Aktif</Badge>
-              <BadgePercent className="text-primary" size={24} />
+    <div className="max-w-4xl mx-auto flex flex-col gap-6">
+      
+      {/* TABS HEADER NAVIGATION */}
+      <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200/50 w-full sm:w-fit self-center">
+        <button
+          onClick={() => setActiveTab("store")}
+          className={cn(
+            "flex-1 sm:flex-none px-6 py-2.5 rounded-xl font-black text-xs transition duration-200 flex items-center justify-center gap-2",
+            activeTab === "store" 
+              ? "bg-white text-emerald-700 shadow-sm" 
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Store size={16} /> Operasional Warung
+        </button>
+        <button
+          onClick={() => setActiveTab("display")}
+          className={cn(
+            "flex-1 sm:flex-none px-6 py-2.5 rounded-xl font-black text-xs transition duration-200 flex items-center justify-center gap-2",
+            activeTab === "display" 
+              ? "bg-white text-emerald-700 shadow-sm" 
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Type size={16} /> Tampilan & Font
+        </button>
+      </div>
+
+      {/* TAB CONTENT: STORE & OPERATIONAL SETTINGS */}
+      {activeTab === "store" && (
+        <Card className="rounded-2xl border bg-white shadow-sm overflow-hidden animate-scale-spring">
+          <CardHeader className="px-6 py-5 border-b bg-slate-50/50">
+            <CardTitle className="flex items-center gap-2.5 text-base font-black text-foreground">
+              <Store size={20} className="text-emerald-600 animate-pulse" /> Konfigurasi Profil & Struk Warung
+            </CardTitle>
+            <p className="text-xs font-semibold text-muted-foreground mt-0.5">Atur informasi warung Anda yang akan dicetak di kertas struk dan nota belanja.</p>
+          </CardHeader>
+          <div className="grid gap-6 p-6">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Label className="grid gap-1.5 text-xs font-extrabold text-slate-500 uppercase tracking-wider">
+                Nama Warung / Usaha
+                <Input 
+                  value={shopName} 
+                  onChange={e => setShopName(e.target.value)} 
+                  placeholder="Contoh: TokoAyu Kelontong" 
+                  className="rounded-xl h-12 border-slate-200 text-foreground font-semibold placeholder:font-normal placeholder:text-muted-foreground/60 focus-visible:ring-emerald-500 text-sm" 
+                />
+              </Label>
+              <Label className="grid gap-1.5 text-xs font-extrabold text-slate-500 uppercase tracking-wider">
+                Nomor WhatsApp (untuk Kirim Nota)
+                <Input 
+                  value={shopPhone} 
+                  onChange={e => setShopPhone(e.target.value)} 
+                  placeholder="Contoh: 08123456789" 
+                  className="rounded-xl h-12 border-slate-200 text-foreground font-semibold placeholder:font-normal placeholder:text-muted-foreground/60 focus-visible:ring-emerald-500 text-sm" 
+                />
+              </Label>
+              <Label className="grid gap-1.5 text-xs font-extrabold text-slate-500 uppercase tracking-wider sm:col-span-2">
+                Alamat Fisik Warung
+                <Input 
+                  value={shopAddress} 
+                  onChange={e => setShopAddress(e.target.value)} 
+                  placeholder="Alamat lengkap jalan, RT/RW, kota, kecamatan" 
+                  className="rounded-xl h-12 border-slate-200 text-foreground font-semibold placeholder:font-normal placeholder:text-muted-foreground/60 focus-visible:ring-emerald-500 text-sm" 
+                />
+              </Label>
+              <Label className="grid gap-1.5 text-xs font-extrabold text-slate-500 uppercase tracking-wider">
+                Printer Struk Thermal (Default)
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Printer size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <Input 
+                      value={printerName} 
+                      onChange={e => setPrinterName(e.target.value)} 
+                      placeholder="Contoh: Thermal 58mm Bluetooth" 
+                      className="rounded-xl h-12 border-slate-200 pl-11 text-foreground font-semibold placeholder:font-normal placeholder:text-muted-foreground/60 focus-visible:ring-emerald-500 text-sm" 
+                    />
+                  </div>
+                </div>
+              </Label>
+              <Label className="grid gap-1.5 text-xs font-extrabold text-slate-500 uppercase tracking-wider">
+                Pajak Penjualan / Charge Kasir (%)
+                <div className="relative">
+                  <BadgePercent size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input 
+                    type="number"
+                    value={taxRate} 
+                    onChange={e => setTaxRate(e.target.value)} 
+                    placeholder="Pajak dalam persen (contoh: 0)" 
+                    className="rounded-xl h-12 border-slate-200 pl-11 text-foreground font-semibold placeholder:font-normal placeholder:text-muted-foreground/60 focus-visible:ring-emerald-500 text-sm" 
+                  />
+                </div>
+              </Label>
             </div>
-            <div>
-              <p className="text-xl font-black text-foreground">{promo.name}</p>
-              <p className="text-xs font-semibold text-muted-foreground">{promo.type}</p>
+            <div className="flex justify-end pt-4 border-t mt-2">
+              <Button 
+                onClick={saveWarungSettings} 
+                className="rounded-xl px-6 h-12 font-black text-sm shadow-md shadow-emerald-600/10 flex gap-2 items-center"
+              >
+                <CheckCircle2 size={18} /> Simpan Pengaturan Warung
+              </Button>
             </div>
-            <div>
-              <p className="text-xs font-bold text-muted-foreground">Harga Promo</p>
-              <p className="text-2xl font-black text-primary">{rupiah(promo.price)}</p>
-            </div>
-            <Button
-              variant="outline"
-              className="rounded-xl border-emerald-100 text-sm font-bold hover:bg-emerald-50 mt-2"
-              onClick={() => sharePromo(promo.name, promo.price)}
-            >
-              <Send size={18} /> Kirim WhatsApp
-            </Button>
           </div>
         </Card>
-      ))}
-    </div>
-  );
-}
+      )}
 
-function LaporanPage() {
-  const totalDebt = debts.reduce((sum, debt) => sum + debt.amount, 0);
-  
-  const reportTable = [
-    { day: "Senin", omzet: 820000, untung: 112000, transactions: 42, status: "Tercapai" },
-    { day: "Selasa", omzet: 940000, untung: 132000, transactions: 48, status: "Tercapai" },
-    { day: "Rabu", omzet: 760000, untung: 98000, transactions: 35, status: "Kurang" },
-    { day: "Kamis", omzet: 1210000, untung: 176000, transactions: 61, status: "Melampaui" },
-    { day: "Jumat", omzet: 1080000, untung: 151000, transactions: 54, status: "Tercapai" },
-    { day: "Sabtu", omzet: 1340000, untung: 203000, transactions: 72, status: "Melampaui" },
-    { day: "Minggu", omzet: 690000, untung: 87000, transactions: 29, status: "Kurang" },
-  ];
+      {/* TAB CONTENT: DISPLAY & FONTS ACCESSIBILITY */}
+      {activeTab === "display" && (
+        <Card className="rounded-2xl border bg-white shadow-sm overflow-hidden animate-scale-spring">
+          <CardHeader className="px-6 py-5 border-b bg-slate-50/50">
+            <CardTitle className="flex items-center gap-2.5 text-base font-black text-foreground">
+              <Type size={20} className="text-emerald-600" /> Kustomisasi Huruf & Aksesibilitas Layar
+            </CardTitle>
+            <p className="text-xs font-semibold text-muted-foreground mt-0.5">Ubah kenyamanan keterbacaan huruf dan skala teks kasir secara langsung.</p>
+          </CardHeader>
+          <div className="grid gap-6 p-6">
+            
+            {/* GRID OF 9 SELECTABLE FONTS */}
+            <div className="grid gap-3">
+              <div>
+                <p className="text-sm font-black text-foreground">Pilih Font Premium ({fonts.length} Pilihan)</p>
+                <p className="text-xs font-semibold text-muted-foreground mt-0.5">Setiap font langsung dimuat dari Google Fonts untuk tampilan visual premium.</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                {fonts.map((f) => {
+                  const isSelected = activeFontFamily === f.value;
+                  return (
+                    <button
+                      key={f.value}
+                      onClick={() => changeFontFamily(f.value)}
+                      style={{ fontFamily: f.css }}
+                      className={cn(
+                        "text-left p-4 rounded-2xl border transition duration-200 hover:border-emerald-500 hover:shadow-sm active:scale-[0.98] flex flex-col justify-between min-h-[110px] group relative overflow-hidden",
+                        isSelected 
+                          ? "border-emerald-600 bg-emerald-50/20 ring-1 ring-emerald-600/30" 
+                          : "border-slate-200 bg-white"
+                      )}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="font-extrabold text-sm text-foreground group-hover:text-emerald-700 leading-tight">
+                          {f.name}
+                        </span>
+                        {isSelected && <span className="h-2 w-2 rounded-full bg-emerald-600 shrink-0" />}
+                      </div>
+                      <span className="text-[10px] font-medium text-muted-foreground mt-2 leading-relaxed" style={{ fontFamily: "var(--font-jakarta), sans-serif" }}>
+                        {f.desc}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-  return (
-    <div className="grid gap-5">
-      <div className="grid gap-4 md:grid-cols-3">
-        <MiniStat title="Omzet minggu ini" value={rupiah(6840000)} />
-        <MiniStat title="Keuntungan" value={rupiah(959000)} tone="warning" />
-        <MiniStat title="Hutang belum dibayar" value={rupiah(totalDebt)} tone="danger" />
-      </div>
-      
-      <Card className="rounded-2xl border bg-white shadow-sm overflow-hidden">
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-b">
-          <CardTitle className="flex items-center gap-2 text-base font-black">
-            <BarChart3 size={22} className="text-primary" /> Grafik Penjualan
-          </CardTitle>
-          <div className="flex gap-2">
-            <Button variant="outline" className="rounded-xl border-emerald-100 text-xs font-bold h-9 shadow-none"><FileDown size={16} /> Excel</Button>
-            <Button variant="outline" className="rounded-xl border-emerald-100 text-xs font-bold h-9 shadow-none"><FileDown size={16} /> PDF</Button>
+            {/* SEGMENTED FONT SIZES */}
+            <div className="grid gap-3 border-t pt-5">
+              <div>
+                <p className="text-sm font-black text-foreground">Pilih Skala Ukuran Teks (Aksesibilitas)</p>
+                <p className="text-xs font-semibold text-muted-foreground mt-0.5">Seluruh tombol, form, dan teks kasir akan membesar/mengecil secara harmonis.</p>
+              </div>
+              <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+                {fontSizes.map((fs) => {
+                  const isSelected = activeFontSize === fs.value;
+                  return (
+                    <button
+                      key={fs.value}
+                      onClick={() => changeFontSize(fs.value)}
+                      className={cn(
+                        "p-4 rounded-2xl border transition duration-200 hover:border-emerald-500 hover:shadow-sm active:scale-[0.98] flex flex-col items-center justify-center text-center gap-1.5 min-h-[96px] group",
+                        isSelected 
+                          ? "border-emerald-600 bg-emerald-50/20 ring-1 ring-emerald-600/30" 
+                          : "border-slate-200 bg-white"
+                      )}
+                    >
+                      <span className={cn(
+                        "font-black text-base text-foreground leading-none flex items-center gap-0.5",
+                        fs.value === "14px" && "text-sm",
+                        fs.value === "18px" && "text-lg",
+                        fs.value === "20px" && "text-xl"
+                      )}>
+                        Aa <Maximize2 size={12} className="opacity-40" />
+                      </span>
+                      <span className="text-[10px] font-black text-muted-foreground group-hover:text-emerald-700 leading-tight">
+                        {fs.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* LIVE CHECKOUT PREVIEW PANEL */}
+            <div className="mt-2 p-5 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col gap-3">
+              <div className="flex items-center justify-between border-b pb-2">
+                <p className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-600 animate-ping" /> Simulasi Tampilan POS Kasir
+                </p>
+                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full">Preview Aktif</span>
+              </div>
+              
+              <div className="grid gap-3.5 p-4 rounded-xl bg-white border border-slate-100 shadow-sm transition-all duration-300">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="text-[9px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md uppercase tracking-wider">Kategori: Bumbu Dapur</span>
+                    <p className="text-lg font-black text-foreground leading-tight mt-1">Kecap Manis ABC Refill 520ml</p>
+                    <p className="text-xs font-semibold text-muted-foreground mt-0.5">Barcode: 899002231201</p>
+                  </div>
+                  <Badge variant="success" className="rounded-lg shrink-0">Stok: 48 pcs</Badge>
+                </div>
+
+                <div className="flex items-center justify-between border-t border-dashed pt-3 mt-1">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-muted-foreground">Harga Jual Eceran</span>
+                    <span className="text-2xl font-black text-emerald-600">Rp 21.500</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg border-slate-200 text-foreground font-black hover:bg-slate-50">-</Button>
+                    <span className="w-6 text-center font-black text-sm">1</span>
+                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg border-slate-200 text-foreground font-black hover:bg-slate-50">+</Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
-        </CardHeader>
-        <CardContent className="h-80 p-5">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={reportChart}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="day" />
-              <YAxis tickFormatter={(value) => `${Number(value) / 1000}rb`} />
-              <Tooltip formatter={(value) => rupiah(Number(value))} />
-              <Legend />
-              <Bar dataKey="omzet" fill="#147a47" name="Omzet" radius={[8, 8, 0, 0]} />
-              <Bar dataKey="untung" fill="#f59e0b" name="Untung" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+        </Card>
+      )}
 
-      <Card className="rounded-2xl border bg-white shadow-sm overflow-hidden">
-        <CardHeader className="px-5 py-4 border-b">
-          <CardTitle className="text-base font-black text-foreground flex items-center gap-2">
-            <Users size={19} className="text-emerald-600" /> Rincian Penjualan Harian
-          </CardTitle>
-        </CardHeader>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left text-sm">
-            <thead>
-              <tr className="border-b bg-muted/40 font-extrabold text-muted-foreground uppercase text-[10px] tracking-wider">
-                <th className="px-6 py-4">Hari</th>
-                <th className="px-6 py-4 text-center">Transaksi</th>
-                <th className="px-6 py-4 text-right">Omzet</th>
-                <th className="px-6 py-4 text-right">Keuntungan</th>
-                <th className="px-6 py-4 text-center">Margin %</th>
-                <th className="px-6 py-4 text-center">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {reportTable.map((row) => {
-                const margin = ((row.untung / row.omzet) * 100).toFixed(1);
-                return (
-                  <tr key={row.day} className="hover:bg-muted/10 transition-colors">
-                    <td className="px-6 py-4 font-black text-foreground">{row.day}</td>
-                    <td className="px-6 py-4 text-center font-bold text-muted-foreground">{row.transactions} kali</td>
-                    <td className="px-6 py-4 text-right font-black text-foreground">{rupiah(row.omzet)}</td>
-                    <td className="px-6 py-4 text-right font-black text-emerald-600">{rupiah(row.untung)}</td>
-                    <td className="px-6 py-4 text-center font-extrabold text-muted-foreground">{margin}%</td>
-                    <td className="px-6 py-4 text-center">
-                      {row.status === "Melampaui" && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full ring-1 ring-emerald-100">
-                          🔥 Melampaui
-                        </span>
-                      )}
-                      {row.status === "Tercapai" && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-black text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full ring-1 ring-blue-100">
-                          ✅ Tercapai
-                        </span>
-                      )}
-                      {row.status === "Kurang" && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full ring-1 ring-amber-100">
-                          ⚠️ Kurang
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
     </div>
   );
 }
 
-function PengaturanPage() {
-  return (
-    <div className="grid gap-5">
-      <Card className="rounded-2xl border bg-white shadow-sm">
-        <div className="grid gap-4 p-6 sm:grid-cols-2">
-          {["Nama warung", "Logo warung", "Alamat warung", "Nomor WhatsApp", "Printer struk", "Pajak / diskon"].map((label) => (
-            <Label key={label} className="grid gap-2">
-              {label}
-              <Input placeholder={label} className="rounded-xl" />
-            </Label>
-          ))}
-        </div>
-      </Card>
-      <Card className="rounded-2xl border bg-white shadow-sm">
-        <CardHeader className="px-5 py-4 border-b">
-          <CardTitle className="flex items-center gap-2 text-base font-black"><Settings size={20} className="text-primary" /> Tampilan dan Akses</CardTitle>
-        </CardHeader>
-        <div className="grid gap-4 sm:grid-cols-3 p-6">
-          {["Font normal", "Font besar", "Font sangat besar"].map((label, index) => (
-            <Button key={label} variant={index === 1 ? "default" : "outline"} className="rounded-xl font-bold h-11">{label}</Button>
-          ))}
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-function FormBarang({ onSave, onScanTrigger, scannedBarcode }: { onSave: (prod: Product) => void; onScanTrigger: () => void; scannedBarcode: string }) {
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("Sembako");
-  const [barcode, setBarcode] = useState("");
-  const [buyPrice, setBuyPrice] = useState("");
-  const [retailPrice, setRetailPrice] = useState("");
-  const [wholesalePrice, setWholesalePrice] = useState("");
-  const [stock, setStock] = useState("");
-  const [minStock, setMinStock] = useState("");
-  const [expiry, setExpiry] = useState("");
-  const [unit, setUnit] = useState("pcs");
+function FormBarang({ 
+  onSave, 
+  onScanTrigger, 
+  scannedBarcode,
+  editingProduct 
+}: { 
+  onSave: (prod: Product) => void; 
+  onScanTrigger: () => void; 
+  scannedBarcode: string;
+  editingProduct?: Product | null;
+}) {
+  const [name, setName] = useState(editingProduct?.name ?? "");
+  const [category, setCategory] = useState(editingProduct?.category ?? "Sembako");
+  const [barcode, setBarcode] = useState(editingProduct?.barcode ?? "");
+  const [buyPrice, setBuyPrice] = useState(editingProduct?.buyPrice ? String(editingProduct.buyPrice) : "");
+  const [retailPrice, setRetailPrice] = useState(editingProduct?.retailPrice ? String(editingProduct.retailPrice) : "");
+  const [wholesalePrice, setWholesalePrice] = useState(editingProduct?.wholesalePrice ? String(editingProduct.wholesalePrice) : "");
+  const [stock, setStock] = useState(editingProduct?.stock ? String(editingProduct.stock) : "");
+  const [minStock, setMinStock] = useState(editingProduct?.minStock ? String(editingProduct.minStock) : "");
+  const [expiry, setExpiry] = useState(editingProduct?.expiry ?? "");
+  const [unit, setUnit] = useState(editingProduct?.unit ?? "pcs");
 
   // Sync barcode field if scanner successfully scans
   useEffect(() => {
@@ -1852,7 +2632,7 @@ function FormBarang({ onSave, onScanTrigger, scannedBarcode }: { onSave: (prod: 
       return;
     }
     const newProduct: Product = {
-      id: `p-${Math.floor(1000 + Math.random() * 9000)}`,
+      id: editingProduct?.id || `p-${Math.floor(1000 + Math.random() * 9000)}`,
       name,
       category,
       sku: barcode.slice(0, 8),
@@ -1865,7 +2645,7 @@ function FormBarang({ onSave, onScanTrigger, scannedBarcode }: { onSave: (prod: 
       minStock: Number(minStock) || 5,
       unit,
       expiry: expiry || new Date().toISOString().split("T")[0],
-      sold: 0
+      sold: editingProduct?.sold ?? 0
     };
     onSave(newProduct);
   };
@@ -1874,8 +2654,12 @@ function FormBarang({ onSave, onScanTrigger, scannedBarcode }: { onSave: (prod: 
     <div className="flex flex-col gap-0">
       {/* Header */}
       <div className="px-5 pb-3">
-        <p className="text-xl font-black tracking-tight text-foreground">Tambah Barang Baru</p>
-        <p className="text-xs font-semibold text-muted-foreground mt-0.5">Masukkan info barang kelontong dengan lengkap.</p>
+        <p className="text-xl font-black tracking-tight text-foreground">
+          {editingProduct ? "Edit Detail Barang" : "Tambah Barang Baru"}
+        </p>
+        <p className="text-xs font-semibold text-muted-foreground mt-0.5">
+          {editingProduct ? "Perbarui informasi detail barang kelontong." : "Masukkan info barang kelontong dengan lengkap."}
+        </p>
       </div>
       {/* Form fields - scrolls independently */}
       <div className="px-5 grid gap-3 sm:grid-cols-2">
@@ -1939,15 +2723,15 @@ function FormBarang({ onSave, onScanTrigger, scannedBarcode }: { onSave: (prod: 
       {/* Sticky save button */}
       <div className="px-5 pt-4 pb-5 mt-2 border-t bg-white sticky bottom-0">
         <Button size="lg" className="w-full rounded-xl h-12 text-sm font-black" onClick={handleSubmit}>
-          Simpan Barang
+          {editingProduct ? "Simpan Perubahan" : "Simpan Barang"}
         </Button>
       </div>
     </div>
   );
 }
 
-function FormHutang({ onSave }: { onSave: () => void }) {
-  const [customer, setCustomer] = useState(customers[0]?.name ?? "");
+function FormHutang({ liveCustomers, onSave }: { liveCustomers: any[]; onSave: () => void }) {
+  const [customer, setCustomer] = useState(liveCustomers[0]?.name ?? "");
   const [product, setProduct] = useState("");
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -1970,6 +2754,7 @@ function FormHutang({ onSave }: { onSave: () => void }) {
     onSave();
   };
 
+
   return (
     <div className="flex flex-col gap-0">
       <div className="px-5 pb-3">
@@ -1980,7 +2765,7 @@ function FormHutang({ onSave }: { onSave: () => void }) {
         <Label className="grid gap-1.5">
           Pilih Pelanggan
           <SelectField value={customer} onChange={e => setCustomer(e.target.value)}>
-            {customers.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+            {liveCustomers.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
           </SelectField>
         </Label>
         <Label className="grid gap-1.5">

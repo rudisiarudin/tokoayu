@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Archive,
   BadgePercent,
@@ -43,6 +43,19 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedFontFamily = localStorage.getItem("tokoayu-font-family");
+      const savedFontSize = localStorage.getItem("tokoayu-font-size");
+      if (savedFontFamily) {
+        document.documentElement.style.setProperty("--app-font-family", savedFontFamily);
+      }
+      if (savedFontSize) {
+        document.documentElement.style.setProperty("--app-font-size", savedFontSize);
+      }
+    }
+  }, []);
 
   return (
     <div className="app-bg min-h-screen text-[#1a2e22]">

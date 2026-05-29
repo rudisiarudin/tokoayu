@@ -79,6 +79,24 @@ export async function getSupabaseDebts(): Promise<Debt[]> {
 }
 
 /**
+ * Fetch transactions from Supabase
+ */
+export async function getSupabaseTransactions(): Promise<Transaction[]> {
+  try {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) throw error;
+    return (data || []) as Transaction[];
+  } catch (err) {
+    console.warn("Supabase transactions fetch failed:", err);
+    return [];
+  }
+}
+
+/**
  * Save new transaction to Supabase
  */
 export async function saveSupabaseTransaction(transaction: Omit<Transaction, "id" | "time"> & { id?: string; time?: string }) {
@@ -111,7 +129,8 @@ export async function updateSupabaseProduct(product: Product) {
       .from("products")
       .update({
         stock: product.stock,
-        sold: product.sold
+        sold: product.sold,
+        buy_price: product.buyPrice,
       })
       .eq("id", product.id);
     
@@ -149,6 +168,40 @@ export async function saveSupabaseDebt(debt: Debt) {
 }
 
 /**
+ * Update debt status in Supabase (e.g. mark as 'lunas')
+ */
+export async function updateSupabaseDebtStatus(id: string, status: "lunas" | "belum lunas") {
+  try {
+    const { error } = await supabase
+      .from("debts")
+      .update({ status })
+      .eq("id", id);
+    
+    if (error) throw error;
+    console.log(`Debt ${id} status successfully marked as ${status} in Supabase`);
+  } catch (err) {
+    console.warn("Could not sync debt status update to Supabase, local update only:", err);
+  }
+}
+
+/**
+ * Update debt details in Supabase (for partial payments/installments)
+ */
+export async function updateSupabaseDebt(id: string, amount: number, status: "lunas" | "belum lunas", note?: string) {
+  try {
+    const { error } = await supabase
+      .from("debts")
+      .update({ amount, status, note })
+      .eq("id", id);
+    
+    if (error) throw error;
+    console.log(`Debt ${id} successfully updated: amount=${amount}, status=${status}`);
+  } catch (err) {
+    console.warn("Could not sync debt update to Supabase, local update only:", err);
+  }
+}
+
+/**
  * Save new product to Supabase
  */
 export async function saveSupabaseProduct(product: Product) {
@@ -158,6 +211,37 @@ export async function saveSupabaseProduct(product: Product) {
     console.log("Product successfully synced to Supabase:", product.name);
   } catch (err) {
     console.warn("Could not sync new product to Supabase, saved locally:", err);
+  }
+}
+
+/**
+ * Full update of all product fields in Supabase (for editing existing products)
+ */
+export async function updateSupabaseProductFull(product: Product) {
+  try {
+    const { error } = await supabase
+      .from("products")
+      .update({
+        name: product.name,
+        category: product.category,
+        sku: product.sku,
+        barcode: product.barcode,
+        buy_price: product.buyPrice,
+        retail_price: product.retailPrice,
+        wholesale_price: product.wholesalePrice,
+        special_price: product.specialPrice,
+        stock: product.stock,
+        min_stock: product.minStock,
+        unit: product.unit,
+        expiry: product.expiry,
+        sold: product.sold,
+      })
+      .eq("id", product.id);
+
+    if (error) throw error;
+    console.log("Product fully updated in Supabase:", product.name);
+  } catch (err) {
+    console.warn("Could not sync full product update to Supabase:", err);
   }
 }
 
