@@ -163,6 +163,13 @@ function KasirPage() {
   const html5QrcodeRef = useRef<any>(null);
 
   useEffect(() => {
+    if (scanStatus === "scanning" && streamRef.current && videoRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(e => console.log("Kasir video play failed:", e));
+    }
+  }, [scanStatus]);
+
+  useEffect(() => {
     async function loadDbData() {
       const dbProducts = await getSupabaseProducts();
       setStockProducts(dbProducts);
@@ -235,10 +242,6 @@ function KasirPage() {
               });
               activeStream = stream;
               streamRef.current = stream;
-              if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                videoRef.current.play().catch(e => console.log(e));
-              }
               setCameraLoading(false);
               setScanStatus("scanning");
               isOpeningRef.current = false;
@@ -978,6 +981,7 @@ function KasirPage() {
               {scanStatus === "scanning" && typeof window !== "undefined" && "BarcodeDetector" in window && (
                 <video
                   ref={videoRef}
+                  autoPlay
                   playsInline
                   muted
                   className="h-full w-full object-cover scale-x-[-1] lg:scale-x-1"
@@ -1073,6 +1077,13 @@ function BarangPage() {
   const html5QrcodeRef = useRef<any>(null);
 
   useEffect(() => {
+    if (scanStatus === "scanning" && streamRef.current && videoRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(e => console.log("Barang video play failed:", e));
+    }
+  }, [scanStatus]);
+
+  useEffect(() => {
     async function load() {
       const dbProducts = await getSupabaseProducts();
       setLocalProducts(dbProducts);
@@ -1146,10 +1157,6 @@ function BarangPage() {
               });
               activeStream = stream;
               streamRef.current = stream;
-              if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                videoRef.current.play().catch(e => console.log(e));
-              }
               setCameraLoading(false);
               setScanStatus("scanning");
               isOpeningRef.current = false;
@@ -1473,6 +1480,7 @@ function BarangPage() {
               {scanStatus === "scanning" && typeof window !== "undefined" && "BarcodeDetector" in window && (
                 <video
                   ref={videoRef}
+                  autoPlay
                   playsInline
                   muted
                   className="h-full w-full object-cover scale-x-[-1] lg:scale-x-1"
