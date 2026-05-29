@@ -1845,17 +1845,19 @@ function FormBarang({ onSave, onScanTrigger, scannedBarcode }: { onSave: (prod: 
   };
 
   return (
-    <div className="grid gap-4 p-5 pt-0">
-      <div>
-        <p className="text-2xl font-black tracking-tight text-foreground">Tambah Barang Baru</p>
-        <p className="text-sm font-semibold text-muted-foreground">Masukkan info barang kelontong dengan lengkap.</p>
+    <div className="flex flex-col gap-0">
+      {/* Header */}
+      <div className="px-5 pb-3">
+        <p className="text-xl font-black tracking-tight text-foreground">Tambah Barang Baru</p>
+        <p className="text-xs font-semibold text-muted-foreground mt-0.5">Masukkan info barang kelontong dengan lengkap.</p>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Label className="grid gap-2">
+      {/* Form fields - scrolls independently */}
+      <div className="px-5 grid gap-3 sm:grid-cols-2">
+        <Label className="grid gap-1.5">
           Nama Barang
-          <Input placeholder="Beras Ramos 5kg" value={name} onChange={e => setName(e.target.value)} className="rounded-xl" />
+          <Input placeholder="Beras Ramos 5kg" value={name} onChange={e => setName(e.target.value)} className="rounded-xl h-11" />
         </Label>
-        <Label className="grid gap-2">
+        <Label className="grid gap-1.5">
           Kategori
           <SelectField value={category} onChange={e => setCategory(e.target.value)}>
             {["Sembako", "Minuman", "Makanan", "Sabun", "Rokok", "Bumbu", "Lainnya"].map((cat) => (
@@ -1863,19 +1865,19 @@ function FormBarang({ onSave, onScanTrigger, scannedBarcode }: { onSave: (prod: 
             ))}
           </SelectField>
         </Label>
-        
+
         {/* Barcode input with scan trigger */}
-        <Label className="grid gap-2">
+        <Label className="grid gap-1.5">
           Barcode / SKU
           <div className="flex gap-2">
-            <Input placeholder="899..." value={barcode} onChange={e => setBarcode(e.target.value)} className="rounded-xl" />
-            <Button type="button" variant="outline" className="rounded-xl border-emerald-100 hover:bg-emerald-50 px-3 font-bold h-10 flex gap-1 items-center" onClick={onScanTrigger}>
+            <Input placeholder="899..." value={barcode} onChange={e => setBarcode(e.target.value)} className="rounded-xl h-11" />
+            <Button type="button" variant="outline" className="rounded-xl border-emerald-100 hover:bg-emerald-50 px-3 font-bold h-11 flex gap-1 items-center shrink-0" onClick={onScanTrigger}>
               <Camera size={16} /> Scan
             </Button>
           </div>
         </Label>
-        
-        <Label className="grid gap-2">
+
+        <Label className="grid gap-1.5">
           Satuan
           <SelectField value={unit} onChange={e => setUnit(e.target.value)}>
             {["pcs", "dus", "pack", "kg", "liter", "botol", "sachet"].map((u) => (
@@ -1883,34 +1885,37 @@ function FormBarang({ onSave, onScanTrigger, scannedBarcode }: { onSave: (prod: 
             ))}
           </SelectField>
         </Label>
-        <Label className="grid gap-2">
+        <Label className="grid gap-1.5">
           Harga Beli (Modal)
-          <Input type="number" placeholder="Harga beli" value={buyPrice} onChange={e => setBuyPrice(e.target.value)} className="rounded-xl" />
+          <Input type="number" inputMode="numeric" placeholder="Harga beli" value={buyPrice} onChange={e => setBuyPrice(e.target.value)} className="rounded-xl h-11" />
         </Label>
-        <Label className="grid gap-2">
+        <Label className="grid gap-1.5">
           Harga Jual Eceran
-          <Input type="number" placeholder="Harga eceran" value={retailPrice} onChange={e => setRetailPrice(e.target.value)} className="rounded-xl" />
+          <Input type="number" inputMode="numeric" placeholder="Harga eceran" value={retailPrice} onChange={e => setRetailPrice(e.target.value)} className="rounded-xl h-11" />
         </Label>
-        <Label className="grid gap-2">
+        <Label className="grid gap-1.5">
           Harga Jual Grosir
-          <Input type="number" placeholder="Harga grosir" value={wholesalePrice} onChange={e => setWholesalePrice(e.target.value)} className="rounded-xl" />
+          <Input type="number" inputMode="numeric" placeholder="Harga grosir" value={wholesalePrice} onChange={e => setWholesalePrice(e.target.value)} className="rounded-xl h-11" />
         </Label>
-        <Label className="grid gap-2">
+        <Label className="grid gap-1.5">
           Stok Awal
-          <Input type="number" placeholder="Stok awal" value={stock} onChange={e => setStock(e.target.value)} className="rounded-xl" />
+          <Input type="number" inputMode="numeric" placeholder="Stok awal" value={stock} onChange={e => setStock(e.target.value)} className="rounded-xl h-11" />
         </Label>
-        <Label className="grid gap-2">
+        <Label className="grid gap-1.5">
           Batas Stok Minimum
-          <Input type="number" placeholder="Batas minimum" value={minStock} onChange={e => setMinStock(e.target.value)} className="rounded-xl" />
+          <Input type="number" inputMode="numeric" placeholder="Batas minimum" value={minStock} onChange={e => setMinStock(e.target.value)} className="rounded-xl h-11" />
         </Label>
-        <Label className="grid gap-2">
+        <Label className="grid gap-1.5 sm:col-span-2">
           Tanggal Kadaluarsa
-          <Input type="date" value={expiry} onChange={e => setExpiry(e.target.value)} className="rounded-xl" />
+          <Input type="date" value={expiry} onChange={e => setExpiry(e.target.value)} className="rounded-xl h-11" />
         </Label>
       </div>
-      <Button size="lg" className="rounded-xl h-12 text-sm font-black mt-2" onClick={handleSubmit}>
-        Simpan Barang
-      </Button>
+      {/* Sticky save button */}
+      <div className="px-5 pt-4 pb-5 mt-2 border-t bg-white sticky bottom-0">
+        <Button size="lg" className="w-full rounded-xl h-12 text-sm font-black" onClick={handleSubmit}>
+          Simpan Barang
+        </Button>
+      </div>
     </div>
   );
 }

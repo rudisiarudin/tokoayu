@@ -85,6 +85,22 @@ textarea {
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
 
+.pb-safe {
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+}
+
+/* Hide scrollbar in modal/dialog content but keep scroll functional */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 3px;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 99px;
+}
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 /* Custom premium checkout animations */
 @keyframes scaleSpring {
   0% {
