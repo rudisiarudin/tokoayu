@@ -442,8 +442,8 @@ function KasirPage() {
       });
   }, [search, stockProducts]);
   const subtotal = cart.reduce((sum, item) => sum + (priceMode === "wholesale" ? item.product.wholesalePrice : item.product.retailPrice) * item.qty, 0);
-  const discount = subtotal > 15000 ? 5000 : 0;
-  const total = Math.max(subtotal - discount, 0);
+  const discount = 0;
+  const total = subtotal;
   const cash = useMemo(() => Number(cashText.replace(/\D/g, "")) || 0, [cashText]);
   const change = Math.max(cash - total, 0);
   const canPay = cart.length > 0 && (method !== "Tunai" || cash >= total);
@@ -682,9 +682,6 @@ function KasirPage() {
           ))}
 
           <div className="grid gap-2 pt-1 text-sm font-bold">
-            <Row label="Subtotal" value={rupiah(subtotal)} />
-            <Row label="Diskon" value={`-${rupiah(discount)}`} />
-            <Separator className="my-2" />
             <Row label="Total bayar" value={rupiah(total)} strong />
           </div>
 
