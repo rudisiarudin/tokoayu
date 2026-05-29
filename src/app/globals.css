@@ -1,0 +1,158 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 142 15% 96%;
+  --foreground: 154 24% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 154 24% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 154 24% 10%;
+  --primary: 142 72% 29%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 28 89% 55%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 142 20% 93%;
+  --muted-foreground: 154 10% 42%;
+  --accent: 142 45% 92%;
+  --accent-foreground: 142 72% 20%;
+  --destructive: 0 78% 48%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 142 16% 88%;
+  --input: 142 16% 88%;
+  --ring: 142 72% 29%;
+}
+
+.dark {
+  --background: 158 28% 9%;
+  --foreground: 140 30% 96%;
+  --card: 158 25% 13%;
+  --card-foreground: 140 30% 96%;
+  --primary: 151 65% 39%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 41 95% 56%;
+  --secondary-foreground: 30 77% 16%;
+  --muted: 158 18% 18%;
+  --muted-foreground: 150 15% 76%;
+  --accent: 206 40% 22%;
+  --accent-foreground: 206 86% 94%;
+  --destructive: 0 70% 48%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 158 16% 24%;
+  --input: 158 16% 24%;
+  --ring: 151 65% 39%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-jakarta), "Plus Jakarta Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  font-size: 16px;
+  letter-spacing: 0;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.18);
+}
+
+.app-bg {
+  background: #f4f7f5;
+}
+
+.pos-card {
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.safe-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/* Custom premium checkout animations */
+@keyframes scaleSpring {
+  0% {
+    transform: scale(0.35);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.12);
+  }
+  75% {
+    transform: scale(0.96);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes rippleExpand {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.75);
+    opacity: 0;
+  }
+}
+
+@keyframes drawCheckmark {
+  0% {
+    stroke-dashoffset: 50;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-scale-spring {
+  animation: scaleSpring 0.55s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+.animate-ripple-1 {
+  animation: rippleExpand 1.6s cubic-bezier(0.1, 0.8, 0.3, 1) infinite;
+}
+
+.animate-ripple-2 {
+  animation: rippleExpand 1.6s cubic-bezier(0.1, 0.8, 0.3, 1) infinite 0.8s;
+}
+
+.animate-draw-check {
+  stroke-dasharray: 50;
+  stroke-dashoffset: 50;
+  animation: drawCheckmark 0.65s cubic-bezier(0.4, 0, 0.2, 1) 0.15s forwards;
+}
+
+@keyframes slideLaser {
+  0% {
+    top: 5%;
+  }
+  50% {
+    top: 95%;
+  }
+  100% {
+    top: 5%;
+  }
+}
+
+.animate-laser {
+  animation: slideLaser 2s linear infinite;
+}
